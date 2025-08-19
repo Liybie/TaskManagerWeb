@@ -1,307 +1,117 @@
-// --- Task Management ---
-let taskCounter = 1;
-let inProgress = 0, completed = 0;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DevList (Web)</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
 
-// Priority order for queue/priority queue
-const priorityOrder = { High: 1, Medium: 2, Low: 3 };
+<!-- Loader -->
+<div id="loader">
+  <div class="dot-loader">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+</div>
 
-// ------------------- Data Structures -------------------
+<!-- Add Task Modal -->
+<div id="taskModal" class="modal">
+  <div class="modal-content" style="width: 700px;">
+    <span class="close">&times;</span>
+    <h2>Add New Task</h2>
+    <form id="taskForm">
+      <div class="form-group">
+        <label>Task Name:</label>
+        <input type="text" id="taskName" required>
+      </div>
+      <div class="form-group">
+        <label>Description:</label>
+        <input type="text" id="taskDesc" required>
+      </div>
+      <div class="form-group">
+        <label>Priority:</label>
+        <select id="taskPriority">
+          <option>Low</option>
+          <option>Medium</option>
+          <option>High</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Due Date:</label>
+        <input type="date" id="taskDue" required>
+      </div>
+      <button type="submit">Add Task</button>
+    </form>
+  </div>
+</div>
 
-// 1. Stack (LIFO)
-class TaskStack {
-  constructor() { this.stack = []; }
-  push(task) { this.stack.push(task); }
-  pop() { return this.stack.pop(); }
-  peek() { return this.stack[this.stack.length - 1]; }
-  isEmpty() { return this.stack.length === 0; }
-}
+<!-- Completed Tasks Modal -->
+<div id="completedModal" class="modal">
+  <div class="modal-content" style="width: 700px;">
+    <span class="close" id="completedClose">&times;</span>
+    <h2>Completed Tasks</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Task Name</th>
+          <th>Description</th>
+          <th>Due Date</th>
+          <th>Date Added</th>
+          <th>Priority</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="completedModalBody"></tbody>
+    </table>
+  </div>
+</div>
 
-// 2. Queue (FIFO)
-class TaskQueue {
-  constructor() { this.queue = []; }
-  enqueue(task) { this.queue.push(task); }
-  dequeue() { return this.queue.shift(); }
-  front() { return this.queue[0]; }
-  isEmpty() { return this.queue.length === 0; }
-}
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="modal">
+  <div class="modal-content delete-box">
+    <h2>Delete Task?</h2>
+    <p>Are you sure you want to delete this task?</p>
+    <div class="modal-actions">
+      <button id="confirmDelete" class="btn-danger">Delete</button>
+      <button id="cancelDelete" class="btn-secondary">Cancel</button>
+    </div>
+  </div>
+</div>
 
-// 3. Priority Queue
-class PriorityQueue {
-  constructor() { this.items = []; }
-  enqueue(task) {
-    this.items.push(task);
-    this.items.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
-  }
-  dequeue() { return this.items.shift(); }
-  peek() { return this.items[0]; }
-  isEmpty() { return this.items.length === 0; }
-}
 
-// --------------------------------------------------------
-// Instances
-let taskStack = new TaskStack();
-let taskQueue = new TaskQueue();
-let pq = new PriorityQueue();
-let taskList = []; // used for rendering
+<!-- Top Panel -->
+<div class="top-panel">
+  <div>
+    <h1>DevList</h1>
+    <div id="stats" class="stats"></div>
+  </div>
+  <div>
+    <button onclick="openTaskDialog()">+ New</button>
+    <button onclick="toggleCompleted()">Completed</button>
+  </div>
+</div>
 
-// ------------------- Core Functions -------------------
+<!-- Task Table -->
+<table id="taskTable">
+  <thead>
+    <tr>
+      <th>Status</th>
+      <th>Task Name</th>
+      <th>Description</th>
+      <th>Due Date</th>
+      <th class="sortable" onclick="sortByStack()">Date Added ▲▼</th>
+      <th class="sortable" onclick="sortByPriority()">Priority ▲▼</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
 
-// Update task stats
-function updateStats() {
-  document.getElementById("stats").textContent =
-    `Tasks: ${taskList.filter(t => !t.status).length} | Completed: ${completed} | In Progress: ${inProgress}`;
-}
+<!-- No Tasks Message -->
+<div id="noTasksMessage">No tasks to accomplish 🎉</div>
 
-// Add a new task
-function addTask(name, desc, due, priority) {
-  const task = {
-    id: taskCounter++,
-    name,
-    desc,
-    added: new Date().toISOString().split("T")[0],
-    due,
-    priority,
-    status: false
-  };
-
-  taskStack.push(task);
-  taskQueue.enqueue(task);
-  pq.enqueue(task);
-  taskList.push(task);
-
-  inProgress++;
-  renderTasks();
-}
-
-// Render tasks
-function renderTasks() {
-  const tbody = document.querySelector("#taskTable tbody");
-  tbody.innerHTML = "";
-
-  taskList.forEach((t, i) => {
-    if (!t.status) {
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td><input type="checkbox" onchange="moveToCompleted(this, ${i})"></td>
-        <td>${t.name}</td>
-        <td>${t.desc}</td>
-        <td>${t.added}</td>
-        <td>${t.due}</td>
-        <td class="priority-${t.priority}">${t.priority}</td>
-        <td style="text-align:center;">
-          <button class="remove-btn" onclick="removeTask(${t.id})">×</button>
-        </td>
-      `;
-      tbody.appendChild(row);
-    }
-  });
-
-  updateStats();
-  checkIfEmpty();
-}
-
-// Move task to completed
-function moveToCompleted(checkbox, index) {
-  if (checkbox.checked) {
-    const task = taskList[index];
-    task.status = true;
-    completed++;
-    inProgress--;
-
-    const clone = document.createElement("tr");
-    clone.innerHTML = `
-      <td>${task.name}</td>
-      <td>${task.desc}</td>
-      <td>${task.added}</td>
-      <td>${task.due}</td>
-      <td class="priority-${task.priority}">${task.priority}</td>
-      <td style="text-align:center;">
-        <button class="remove-btn" onclick="removeTask(${task.id})">×</button>
-      </td>
-    `;
-    document.getElementById("completedModalBody").appendChild(clone);
-
-    renderTasks();
-  }
-}
-
-// ------------------- Sorting -------------------
-function sortByStack() {
-  taskList = [...taskStack.stack].filter(t => !t.status);
-  renderTasks();
-}
-
-function sortByPriority() {
-  taskList = [...pq.items].filter(t => !t.status);
-  renderTasks();
-}
-
-function setSort(type) {
-  if (type === 'stack') sortByStack();
-  else if (type === 'priority') sortByPriority();
-}
-
-// ------------------- Extra Features -------------------
-function undoTask() {
-  const lastTask = taskStack.pop();
-  if (lastTask) removeTask(lastTask.id);
-}
-
-function processNextTask() {
-  const task = taskQueue.dequeue();
-  if (task) moveToCompleted({ checked: true }, taskList.indexOf(task));
-}
-
-function processUrgentTask() {
-  const urgent = pq.dequeue();
-  if (urgent) moveToCompleted({ checked: true }, taskList.indexOf(urgent));
-}
-
-// ------------------- Modal & Form -------------------
-const modal = document.getElementById("taskModal");
-const span = document.querySelector(".close");
-const form = document.getElementById("taskForm");
-
-function openTaskDialog() { modal.style.display = "block"; }
-span.onclick = () => modal.style.display = "none";
-window.onclick = (e) => { if (e.target === modal) modal.style.display = "none"; }
-
-form.addEventListener("submit", function(e) {
-  e.preventDefault();
-  const name = document.getElementById("taskName").value.trim();
-  const desc = document.getElementById("taskDesc").value.trim();
-  const priority = document.getElementById("taskPriority").value;
-  const due = document.getElementById("taskDue").value;
-
-  if (!name || !desc || !due) {
-    alert("Please fill in all fields!");
-    return;
-  }
-
-  addTask(name, desc, due, priority);
-  form.reset();
-  modal.style.display = "none";
-});
-
-// --- Completed Tasks Modal ---
-function toggleCompleted() {
-  const completedModal = document.getElementById("completedModal");
-  const completedModalBody = document.getElementById("completedModalBody");
-
-  completedModalBody.innerHTML = "";
-  taskList.forEach(t => {
-    if (t.status) {
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${t.name}</td>
-        <td>${t.desc}</td>
-        <td>${t.added}</td>
-        <td>${t.due}</td>
-        <td class="priority-${t.priority}">${t.priority}</td>
-        <td style="text-align:center;">
-          <button class="remove-btn" onclick="removeTask(${t.id})">×</button>
-        </td>
-      `;
-      completedModalBody.appendChild(row);
-    }
-  });
-
-  completedModal.style.display = "block";
-}
-
-document.getElementById("completedClose").onclick = () => {
-  document.getElementById("completedModal").style.display = "none";
-};
-
-window.addEventListener("click", (e) => {
-  const completedModal = document.getElementById("completedModal");
-  if (e.target === completedModal) completedModal.style.display = "none";
-});
-
-// ------------------- Utilities -------------------
-
-// Show "No Tasks" if empty
-function checkIfEmpty() {
-  const tbody = document.querySelector("#taskTable tbody");
-  const noTasksMessage = document.getElementById("noTasksMessage");
-  noTasksMessage.style.display = tbody.children.length === 0 ? "block" : "none";
-}
-
-// Prevent past due dates
-const taskDueInput = document.getElementById("taskDue");
-const today = new Date().toISOString().split("T")[0];
-taskDueInput.setAttribute("min", today);
-
-// Loader
-window.addEventListener("load", () => {
-  const loader = document.getElementById("loader");
-  setTimeout(() => {
-    loader.style.opacity = "0";
-    loader.style.transition = "opacity 0.5s ease";
-    setTimeout(() => loader.style.display = "none", 500);
-  }, 1200);
-});
-
-// Init
-document.addEventListener("DOMContentLoaded", () => {
-  updateStats();
-  checkIfEmpty();
-});
-
-// ------------------- Delete Confirmation Modal -------------------
-let taskToDelete = null;
-
-// Open delete modal instead of confirm()
-function removeTask(id) {
-  taskToDelete = id;
-  document.getElementById("deleteModal").style.display = "block";
-}
-
-// Confirm delete
-document.getElementById("confirmDelete").onclick = () => {
-  if (taskToDelete !== null) {
-    const indexList = taskList.findIndex(t => t.id === taskToDelete);
-    if (indexList > -1) {
-      const task = taskList.splice(indexList, 1)[0];
-
-      // ✅ Fix counters correctly
-      if (task.status) {
-        completed--;
-      } else {
-        inProgress--;
-      }
-
-      renderTasks();
-      updateStats();
-    }
-
-    // Remove from data structures
-    taskStack.stack = taskStack.stack.filter(t => t.id !== taskToDelete);
-    taskQueue.queue = taskQueue.queue.filter(t => t.id !== taskToDelete);
-    pq.items = pq.items.filter(t => t.id !== taskToDelete);
-
-    // Remove from completed modal
-    const completedRows = document.querySelectorAll("#completedModalBody tr");
-    completedRows.forEach(row => {
-      if (row.innerHTML.includes(`removeTask(${taskToDelete})`)) row.remove();
-    });
-
-    taskToDelete = null;
-    document.getElementById("deleteModal").style.display = "none";
-  }
-};
-
-// Cancel delete
-document.getElementById("cancelDelete").onclick = () => {
-  taskToDelete = null;
-  document.getElementById("deleteModal").style.display = "none";
-};
-
-// Close when clicking outside modal
-window.onclick = (e) => {
-  const deleteModal = document.getElementById("deleteModal");
-  if (e.target === deleteModal) {
-    deleteModal.style.display = "none";
-    taskToDelete = null;
-  }
-};
+<script src="js/script.js"></script>
+</body>
+</html>
