@@ -3,7 +3,7 @@ let taskCounter = 1;
 let inProgress = 0, completed = 0;
 
 // Priority order for queue/priority queue
-let priorityOrder = { High: 1, Medium: 2, Low: 3 };
+const priorityOrder = { High: 1, Medium: 2, Low: 3 };
 
 // ------------------- Data Structures -------------------
 
@@ -42,8 +42,7 @@ class PriorityQueue {
 let taskStack = new TaskStack();
 let taskQueue = new TaskQueue();
 let pq = new PriorityQueue();
-
-let taskList = []; // still used for rendering
+let taskList = []; // used for rendering
 
 // ------------------- Core Functions -------------------
 
@@ -65,17 +64,16 @@ function addTask(name, desc, due, priority) {
     status: false
   };
 
-  // Add into all structures
   taskStack.push(task);
   taskQueue.enqueue(task);
   pq.enqueue(task);
+  taskList.push(task);
 
-  taskList.push(task); // used for rendering
   inProgress++;
   renderTasks();
 }
 
-// Render tasks in table
+// Render tasks
 function renderTasks() {
   const tbody = document.querySelector("#taskTable tbody");
   tbody.innerHTML = "";
@@ -99,6 +97,7 @@ function renderTasks() {
   });
 
   updateStats();
+  checkIfEmpty();
 }
 
 // Move task to completed
@@ -126,57 +125,33 @@ function moveToCompleted(checkbox, index) {
   }
 }
 
-// Remove task completely
-function removeTask(id) {
-  const indexList = taskList.findIndex(t => t.id === id);
-  if (indexList > -1) {
-    const task = taskList.splice(indexList, 1)[0];
-    if (!task.status) inProgress--;
-    renderTasks();
-    updateStats();
-  }
-
-  // Remove from Stack
-  taskStack.stack = taskStack.stack.filter(t => t.id !== id);
-  // Remove from Queue
-  taskQueue.queue = taskQueue.queue.filter(t => t.id !== id);
-  // Remove from Priority Queue
-  pq.items = pq.items.filter(t => t.id !== id);
-
-  // Also remove from completed modal if exists
-  const completedRows = document.querySelectorAll("#completedModalBody tr");
-  completedRows.forEach(row => {
-    if (row.innerHTML.includes(`removeTask(${id})`)) row.remove();
-  });
-}
-
-// Sort by original order (Stack base)
+// ------------------- Sorting -------------------
 function sortByStack() {
   taskList = [...taskStack.stack].filter(t => !t.status);
   renderTasks();
 }
 
-// Sort by priority (Priority Queue base)
 function sortByPriority() {
   taskList = [...pq.items].filter(t => !t.status);
   renderTasks();
 }
 
-// ------------------- Extra Features -------------------
+function setSort(type) {
+  if (type === 'stack') sortByStack();
+  else if (type === 'priority') sortByPriority();
+}
 
-// Undo last task (using Stack)
+// ------------------- Extra Features -------------------
 function undoTask() {
   const lastTask = taskStack.pop();
   if (lastTask) removeTask(lastTask.id);
 }
 
-// Process next task in order (using Queue)
 function processNextTask() {
   const task = taskQueue.dequeue();
   if (task) moveToCompleted({ checked: true }, taskList.indexOf(task));
 }
 
-// Process most urgent task (using Priority Queue)
 function processUrgentTask() {
   const urgent = pq.dequeue();
   if (urgent) moveToCompleted({ checked: true }, taskList.indexOf(urgent));
@@ -197,7 +172,12 @@ form.addEventListener("submit", function(e) {
   const desc = document.getElementById("taskDesc").value.trim();
   const priority = document.getElementById("taskPriority").value;
   const due = document.getElementById("taskDue").value;
-  if (!name || !desc || !due) { alert("Please fill in all fields!"); return; }
+
+  if (!name || !desc || !due) {
+    alert("Please fill in all fields!");
+    return;
+  }
+
   addTask(name, desc, due, priority);
   form.reset();
   modal.style.display = "none";
@@ -238,15 +218,21 @@ window.addEventListener("click", (e) => {
   if (e.target === completedModal) completedModal.style.display = "none";
 });
 
-// Initialize stats
-updateStats();
+// ------------------- Utilities -------------------
 
-// Prevent selecting past dates for Due Date
+// Show "No Tasks" if empty
+function checkIfEmpty() {
+  const tbody = document.querySelector("#taskTable tbody");
+  const noTasksMessage = document.getElementById("noTasksMessage");
+  noTasksMessage.style.display = tbody.children.length === 0 ? "block" : "none";
+}
+
+// Prevent past due dates
 const taskDueInput = document.getElementById("taskDue");
 const today = new Date().toISOString().split("T")[0];
 taskDueInput.setAttribute("min", today);
 
-// Loader animation
+// Loader
 window.addEventListener("load", () => {
   const loader = document.getElementById("loader");
   setTimeout(() => {
@@ -256,35 +242,66 @@ window.addEventListener("load", () => {
   }, 1200);
 });
 
-// Sorting toggle
-function setSort(type) {
-  const buttons = document.querySelectorAll('.sort-toggle .toggle-btn');
-  const slider = document.querySelector('.sort-toggle .slider');
-
-  buttons.forEach((btn, i) => {
-    btn.classList.remove('active');
-    if ((type === 'stack' && i === 0) || (type === 'priority' && i === 1)) {
-      btn.classList.add('active');
-      slider.style.left = (i * 50) + '%';
-    }
-  });
-
-  if (type === 'stack') sortByStack();
-  else if (type === 'priority') sortByPriority();
-}
-// --- Utility to check if there are tasks ---
-function checkIfEmpty() {
-  const tbody = document.querySelector("#taskTable tbody");
-  const noTasksMessage = document.getElementById("noTasksMessage");
-
-  if (tbody.children.length === 0) {
-    noTasksMessage.style.display = "block";
-  } else {
-    noTasksMessage.style.display = "none";
-  }
-}
-
-// Example: call checkIfEmpty() whenever you add/remove tasks
+// Init
 document.addEventListener("DOMContentLoaded", () => {
+  updateStats();
   checkIfEmpty();
 });
+
+// ------------------- Delete Confirmation Modal -------------------
+let taskToDelete = null;
+
+// Open delete modal instead of confirm()
+function removeTask(id) {
+  taskToDelete = id;
+  document.getElementById("deleteModal").style.display = "block";
+}
+
+// Confirm delete
+document.getElementById("confirmDelete").onclick = () => {
+  if (taskToDelete !== null) {
+    const indexList = taskList.findIndex(t => t.id === taskToDelete);
+    if (indexList > -1) {
+      const task = taskList.splice(indexList, 1)[0];
+
+      // ✅ Fix counters correctly
+      if (task.status) {
+        completed--;
+      } else {
+        inProgress--;
+      }
+
+      renderTasks();
+      updateStats();
+    }
+
+    // Remove from data structures
+    taskStack.stack = taskStack.stack.filter(t => t.id !== taskToDelete);
+    taskQueue.queue = taskQueue.queue.filter(t => t.id !== taskToDelete);
+    pq.items = pq.items.filter(t => t.id !== taskToDelete);
+
+    // Remove from completed modal
+    const completedRows = document.querySelectorAll("#completedModalBody tr");
+    completedRows.forEach(row => {
+      if (row.innerHTML.includes(`removeTask(${taskToDelete})`)) row.remove();
+    });
+
+    taskToDelete = null;
+    document.getElementById("deleteModal").style.display = "none";
+  }
+};
+
+// Cancel delete
+document.getElementById("cancelDelete").onclick = () => {
+  taskToDelete = null;
+  document.getElementById("deleteModal").style.display = "none";
+};
+
+// Close when clicking outside modal
+window.onclick = (e) => {
+  const deleteModal = document.getElementById("deleteModal");
+  if (e.target === deleteModal) {
+    deleteModal.style.display = "none";
+    taskToDelete = null;
+  }
+};
